@@ -58,7 +58,7 @@ import yaml
 
 DEFAULT_FREQ = 10.0
 MAX_FREQ = 500.0
-MARKER_TIMER = 1.0
+MARKER_TIMER = 2.0
 DEFAULT_FRAME_ID = 'map'
 DEFAULT_BASE_FRAME_ID = 'base_link'
 MAX_MARKER_ID = 10000
@@ -331,8 +331,9 @@ class MarkerMapping:
 			Actions performed in standby state
 		'''
 		t_now = rospy.Time.now()
-		
-		if (t_now - self.last_marker_time).to_sec() < MARKER_TIMER:
+		diff = (t_now - self.last_marker_time).to_sec()
+		#print self.last_marker_time.to_sec(), t_now.to_sec(), diff
+		if diff <= MARKER_TIMER:
 			rospy.loginfo('%s::standbyState: marker detected'%self.node_name)
 			self.switchToState(State.READY_STATE)
 		
@@ -456,15 +457,12 @@ class MarkerMapping:
 		'''
 		#rospy.loginfo('MarkerMapping:topicCb')
 		self._marker_msg = msg
-		valid_marker = False
 		if len(msg.markers) > 0:
 			# Filter the markers by min & max id
 			for marker in msg.markers:
 				if marker.id >= self._min_marker_id and marker.id <= self._max_marker_id:
-					valid_marker = True
-				
-		if valid_marker:
-			self.last_marker_time = msg.header.stamp
+					self.last_marker_time = marker.header.stamp
+	
 
 	
 	def saveMarkerServiceCb(self, req):
@@ -493,12 +491,14 @@ class MarkerMapping:
 					
 					if ret == 0:					
 						self._marker_dict[marker.id] = marker
-						self.msg_state.ids_recorded.append(marker.id)
-					
+					else:
+						rospy.logerr('%s:saveMarkerServiceCb: error transforming marker id  %d',self.node_name, marker.id)
+						return False
 					#print self._marker_dict
 				
 			# Saving to file
 			self.saveMarkersToFile(self._folder_path, self._markers_filename)	
+			
 			
 			
 			return True
@@ -651,7 +651,7 @@ class MarkerMapping:
 			markers_file.writelines(['- id: %d\n'%(marker.id), '  frame: %s\n'%(self._frame_id)])
 			markers_file.writelines(['  position: [%f, %f, %f]\n'%(marker.pose.pose.position.x, marker.pose.pose.position.y, marker.pose.pose.position.z),
 			 '  orientation: [%f, %f, %f, %f]\n'%(marker.pose.pose.orientation.x, marker.pose.pose.orientation.y, marker.pose.pose.orientation.z, marker.pose.pose.orientation.w)])
-		
+			self.msg_state.ids_recorded.append(marker_id)
 		markers_file.close()
 		
 		return 0
@@ -701,6 +701,10 @@ class MarkerMapping:
 				rospy.logerr('%s:loadMarkersFromFile: error parsing yaml file %s. %s'%(self.node_name,	file_path, e))
 				return -1
 			except IndexError, e:
+				self._marker_dict.clear()
+				rospy.logerr('%s:loadMarkersFromFile: error parsing yaml file %s. %s'%(self.node_name,	file_path, e))
+				return -1
+			except TypeError, e:
 				self._marker_dict.clear()
 				rospy.logerr('%s:loadMarkersFromFile: error parsing yaml file %s. %s'%(self.node_name,	file_path, e))
 				return -1
