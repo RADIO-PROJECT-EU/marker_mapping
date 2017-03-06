@@ -91,10 +91,10 @@ markers:
   * id as [int]. If no id is specified, it saves all the markers received in the topic ar_pose_marker
   * filename as string. It specifies the filename to save the config. If not set, it's saved in the default filename
  * Example:
-```
-rosservice call /marker_mapping_node/save_maker "id: []
-filename: ''"
-```
+  ```
+  rosservice call /marker_mapping_node/save_maker "id: []
+  filename: ''"
+  ```
 * init_pose_from_marker (marker_mapping/InitPoseFromMarker)
  * If a markers is being detected and it has been previously saved with respect to frame_id, it calculates the robot position and sends the initpose to the amcl node.
  * Params:
