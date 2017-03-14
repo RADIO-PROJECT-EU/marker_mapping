@@ -39,7 +39,7 @@ import time, threading
 from robotnik_msgs.msg import State
 from ar_track_alvar_msgs.msg import AlvarMarkers, AlvarMarker
 from std_srvs.srv import Empty
-from geometry_msgs.msg import PoseArray, TransformStamped, PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseArray, TransformStamped, PoseWithCovarianceStamped, Pose2D
 from marker_mapping.srv import InitPoseFromMarker, SaveMarker
 from marker_mapping.msg import MarkerMappingState
 
@@ -149,6 +149,7 @@ class MarkerMapping:
 		# Publishers
 		self._state_publisher = rospy.Publisher('~state', MarkerMappingState, queue_size=10)
 		self._initialpose_publisher = rospy.Publisher('/initialpose', PoseWithCovarianceStamped, queue_size=10)
+		self._global_pose_publisher = rospy.Publisher('/global_pose', Pose2D, queue_size=10)
 		# Subscribers
 		# topic_name, msg type, callback, queue_size
 		self.markers_subscriber = rospy.Subscriber('/ar_pose_marker', AlvarMarkers, self.markersCb, queue_size = 10)
@@ -306,7 +307,29 @@ class MarkerMapping:
 				transform.transform.rotation.z = marker_pose.pose.orientation.z
 				transform.transform.rotation.w = marker_pose.pose.orientation.w
 				self._transform_broadcaster.sendTransform(transform)
-					
+		
+		# publish the global pose based on the transform from frame_id (map) to base_frame_id (base_footprint)
+		if self._transform_listener.frameExists(self._frame_id) and self._transform_listener.frameExists(self._base_frame_id):
+				
+			try:
+				t = self._transform_listener.getLatestCommonTime(self._frame_id, self._base_frame_id)
+				position, quaternion = self._transform_listener.lookupTransform(self._frame_id, self._base_frame_id, t)
+				pose2d = Pose2D()
+				pose2d.x = position[0]
+				pose2d.y = position[1]
+				euler = tf.transformations.euler_from_quaternion(quaternion)
+				pose2d.theta = euler[2]
+				self._global_pose_publisher.publish(pose2d)
+				
+				#print position, quaternion
+			except tfException, e:
+				rospy.logerr('%s::rosPublish: %s'%(self.node_name, e))
+			except ConnectivityException, e:
+				rospy.logerr('%s::rosPublish: %s'%(self.node_name, e))
+			except LookupException, e:
+				rospy.logerr('%s::rosPublish: %s'%(self.node_name, e))
+			except ExtrapolationException, e:
+				rospy.logerr('%s::rosPublish: %s'%(self.node_name, e))			
 					
 		return 0
 		
